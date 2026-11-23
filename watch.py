@@ -7,7 +7,16 @@ PAGES = ["https://bettingsignals.net/index.html",
 TOPIC = "signali-e3fdfb484be5"
 MESSAGE = "NOVI SIGNAL JE STIGAO"
 STATE = Path("state/seen.json")
+DEBUG = Path("state/debug")
 VOLATILE = re.compile(r"^[+\-]?\d+([.,]\d+)?\s*%?$")
+SEL = "tr, ion-row, ion-item, ion-card, [class*=row], [class*=match], [class*=signal], [class*=item]"
+
+JS = """(sel) => {
+  const els = [...document.querySelectorAll(sel)];
+  const leaf = els.filter(e => !e.querySelector(sel));
+  return leaf.map(e => (e.innerText || '').split('\\n').map(s => s.trim()).filter(Boolean))
+             .filter(r => r.length >= 2 && r.join('').length > 8);
+}"""
 
 def notify():
     req = urllib.request.Request("https://ntfy.sh/" + TOPIC, data=MESSAGE.encode("utf-8"),
@@ -16,49 +25,64 @@ def notify():
     print("Push poslat.")
 
 def signal_key(cells):
-    ident = [c for c in cells if c and not (VOLATILE.match(c) and len(c) > 1)]
+    ident = [c for c in cells if not (VOLATILE.match(c) and len(c) > 1)]
     if len(ident) < 2:
         ident = cells
     return hashlib.sha1(" | ".join(ident).lower().encode()).hexdigest()[:16]
 
-JS = "() => [...document.querySelectorAll('tr')].map(tr => [...tr.querySelectorAll('td')].map(td => td.innerText.trim())).filter(r => r.length >= 2)"
-
-def scrape():
+def scrape(debug):
+    net = []
+    def on_resp(r):
+        try:
+            ct = r.headers.get("content-type", "")
+            if "json" in ct or "text/plain" in ct or "csv" in ct:
+                net.append(r.url + "\n" + r.text()[:3000])
+            else:
+                net.append(r.url)
+        except Exception:
+            net.append(r.url)
     with sync_playwright() as p:
         b = p.chromium.launch()
-        page = b.new_page()
+        page = b.new_page(viewport={"width": 1280, "height": 3000})
+        page.on("response", on_resp)
+        result = None
+        texts = []
         for url in PAGES:
             try:
                 page.goto(url, wait_until="networkidle", timeout=60000)
             except Exception as e:
                 print("Greska:", url, e)
                 continue
-            time.sleep(5)
+            time.sleep(8)
             rows = []
             for fr in page.frames:
                 try:
-                    rows += fr.evaluate(JS)
+                    rows += fr.evaluate(JS, SEL)
+                    texts.append("=== " + fr.url + "\n" + fr.evaluate("() => document.body ? document.body.innerText : ''"))
                 except Exception:
                     pass
+            print(url, len(rows), "redova")
             if rows:
-                print(url, len(rows), "redova")
-                b.close()
-                return rows
-            print(url, "tabela nije nadjena")
+                result = rows
+                break
         b.close()
+    if debug or not result:
+        DEBUG.mkdir(parents=True, exist_ok=True)
+        (DEBUG / "text.txt").write_text("\n\n".join(texts)[:200000])
+        (DEBUG / "net.txt").write_text("\n\n".join(net)[:200000])
+        (DEBUG / "rows.json").write_text(json.dumps(result or [], ensure_ascii=False, indent=1)[:200000])
+    return result
 
 def main():
     if os.environ.get("TEST_PUSH") == "1":
         notify()
         return
-    rows = scrape()
+    first = not STATE.exists()
+    rows = scrape(debug=first)
     if not rows:
         print("Nema podataka, preskacem.")
         return
-    for r in rows[:10]:
-        print("  ", r)
     keys = list(dict.fromkeys(signal_key(r) for r in rows))
-    first = not STATE.exists()
     seen = [] if first else json.loads(STATE.read_text())
     new = [k for k in keys if k not in set(seen)]
     print("Signala:", len(keys), "novih:", len(new))
