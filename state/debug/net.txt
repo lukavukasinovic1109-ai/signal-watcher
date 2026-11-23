@@ -1,0 +1,13 @@
+https://bettingsignals.net/index.html
+
+https://bettingsignals.net/assets/index-bafed887.css
+
+https://bettingsignals.net/assets/index-68629e0f.js
+
+https://bettingsignals.net/assets/keyboard2-44fe9f33.js
+
+https://bettingsignals.net/assets/index9-ee257a68.js
+
+https://bettingsignals.net/assets/focus-visible-9c13edeb.js
+
+https://bettingsignals.net/wp-json/wp/v2/getAllSignals?proxy_for=http://89.117.37.53:8088
