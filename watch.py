@@ -6,7 +6,7 @@ PAGES = ["https://bettingsignals.net/index.html",
          "https://bettingsignals.net/football-dropping-odds/"]
 TOPIC = "signali-e3fdfb484be5"
 MESSAGE = "NOVI SIGNAL JE STIGAO"
-STATE = Path("state/seen.json")
+STATE = Path("state/seen2.json")
 DEBUG = Path("state/debug")
 VOLATILE = re.compile(r"^[+\-]?\d+([.,]\d+)?\s*%?$")
 SEL = "tr, ion-row, ion-item, ion-card, [class*=row], [class*=match], [class*=signal], [class*=item]"
@@ -24,10 +24,11 @@ def notify():
     urllib.request.urlopen(req, timeout=30).read()
     print("Push poslat.")
 
-def signal_key(cells):
-    ident = [c for c in cells if not (VOLATILE.match(c) and len(c) > 1)]
-    if len(ident) < 2:
-        ident = cells
+def signal_key(c):
+    if len(c) >= 5:
+        ident = c[:4] + [c[4].split("|")[0].strip()]
+    else:
+        ident = [x for x in c if not (VOLATILE.match(x) and len(x) > 1)]
     return hashlib.sha1(" | ".join(ident).lower().encode()).hexdigest()[:16]
 
 def scrape(debug):
